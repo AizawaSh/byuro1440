@@ -6,10 +6,10 @@
 
 ![Топология GNS3](images/image1.png)
 
-| Компонент | Компоненты | Адрес |
-|---|---|---|
-| Core-VM | Open5GS, WebUI, MongoDB | `<IP-Core-VM>`  |
-| RAN-VM | [UERANSIM](https://github.com/aligungr/UERANSIM): gNB + UE | `<IP-RAN-VM>` |
+| Компонент | Роль | Компоненты | Адрес |
+|---| --- |---|---|
+| Core-VM | Ядро сети 5G | Open5GS (AMF, SMF, UPF, NRF, SCP, AUSF, UDM, UDR, PCF), WebUI, MongoDB | `<IP-Core-VM>`  |
+| RAN-VM | Базовая станция и абонент | [UERANSIM](https://github.com/aligungr/UERANSIM): gNB + UE | `<IP-RAN-VM>` |
 
 Параметры сети 5G:
 - **PLMN**: `999/70`
@@ -20,7 +20,7 @@
 - **K**: `465B5CE8B199B49FAA5F0A2EE238A6BC`
 - **OPc**: `E8ED289DEBA952E4283B54E88E6183CA`
 
-Обе ВМ подключены к узлу **NAT** в GNS3. Актуальные адреса для настроек можно узнать с помощью команды `ip addr` (интерфейс ens3).
+Сетевая связность: обе ВМ в подсети 192.168.100.0/24 (через узел NAT в GNS3). Актуальные адреса для настроек можно узнать с помощью команды `ip addr` (интерфейс ens3).
 
 ---
 
@@ -113,7 +113,7 @@ amf:
 sudo systemctl restart open5gs-amfd
 ~~~
 
-### 2.5. Настройка UPF и NAT
+### 2.5. Настройка UPF
 
 Файл `/etc/open5gs/upf.yaml`, секция `gtpu`:
 
@@ -130,7 +130,20 @@ sudo systemctl restart open5gs-amfd
 sudo systemctl restart open5gs-upfd
 ~~~
 
-NAT и форвардинг:
+Проверка:
+~~~
+sudo ss -ulnp | grep 2152   # должно быть <IP-Core-VM>:2152
+~~~
+
+### 2.6. Создание интерфейса ogstun и NAT
+UPF обычно создаёт ogstun сам, но необходимо проверить:
+
+~~~
+ip addr show ogstun   # должен быть 10.45.0.1/16
+~~~
+
+Включение форвардинга и NAT:
+
 ~~~
 sudo sysctl -w net.ipv4.ip_forward=1
 echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
@@ -144,10 +157,11 @@ sudo apt install -y iptables-persistent
 sudo netfilter-persistent save
 ~~~
 
-> Явное `-o ens3` в MASQUERADE критично: без него трафик UE часто не уходит в интернет.
+> Явное указание -o ens3 в MASQUERADE часто решает проблему, когда трафик UE не выходит в интернет.
 
 
-### 2.6. Добавление абонента
+
+### 2.7. Добавление абонента
 
 Через WebUI (`http://<IP-Core-VM>:9999/`, `admin`/`1423`):
 
@@ -163,23 +177,22 @@ sudo netfilter-persistent save
 | SST | `1` |
 
 
-### 2.7. Проверка служб
+### 2.8. Проверка служб
 
 ~~~
 systemctl status open5gs-amfd open5gs-smfd open5gs-upfd open5gs-nrfd open5gs-scpd --no-pager
 ~~~
 
-## 13. Автозапуск после перезагрузки (Core-VM)
-
-~~~
-sudo systemctl enable docker
-sudo systemctl enable open5gs-nrfd open5gs-scpd open5gs-amfd open5gs-smfd open5gs-upfd open5gs-ausfd open5gs-udmd open5gs-udrd open5gs-pcfd
-sudo docker update --restart=always mongodb webui
-~~~
-
 Все -- `active (running)`.
 
-## 9. RAN-VM: сборка UERANSIM
+Включение автозапуска после перезагрузки
+
+~~~
+sudo systemctl enable open5gs-nrfd open5gs-scpd open5gs-amfd open5gs-smfd open5gs-upfd open5gs-ausfd open5gs-udmd open5gs-udrd open5gs-pcfd
+~~~
+
+## 3. Настройка RAN-VM
+### 3.1. Сборка UERANSIM
 
 ~~~
 sudo apt update
@@ -189,9 +202,8 @@ cd UERANSIM
 make -j$(nproc)
 ~~~
 
----
 
-## 10. RAN-VM: настройка gNB
+### 3.2. Настройка gNB
 
 `~/UERANSIM/config/open5gs-gnb.yaml`:
 
@@ -214,7 +226,7 @@ slices:
 
 ---
 
-## 11. RAN-VM: настройка UE
+### 3.3. Настройка UE
 
 `~/UERANSIM/config/open5gs-ue.yaml`:
 
@@ -240,7 +252,7 @@ sessions:
 
 ---
 
-## 12. Запуск стенда
+## 4. Запуск стенда
 
 **Core-VM**: убедитесь, что MongoDB и службы запущены:
 ~~~
@@ -248,7 +260,7 @@ sudo docker start mongodb
 systemctl status open5gs-amfd open5gs-smfd open5gs-upfd open5gs-nrfd --no-pager
 ~~~
 
-**RAN-VM, терминал 1 — gNB:**
+**RAN-VM, терминал 1 -- gNB:**
 ~~~
 cd ~/UERANSIM
 sudo ./build/nr-gnb -c config/open5gs-gnb.yaml
@@ -256,7 +268,7 @@ sudo ./build/nr-gnb -c config/open5gs-gnb.yaml
 
 Ждём `NG Setup procedure is successful`.
 
-**RAN-VM, терминал 2 — UE:**
+**RAN-VM, терминал 2 -- UE:**
 ~~~
 cd ~/UERANSIM
 sudo ./build/nr-ue -c config/open5gs-ue.yaml
