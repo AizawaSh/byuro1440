@@ -1,6 +1,6 @@
 # byuro1440
 
-# Инструкция по настройке лабораторного стенда 5G (Open5GS + UERANSIM) в GNS3
+# Инструкция по настройке лабораторного стенда 5G (Open5GS + [UERANSIM](https://github.com/aligungr/UERANSIM)) в GNS3
 
 ## 1. Архитектура и параметры
 
@@ -9,7 +9,7 @@
 | Компонент | Компоненты | Адрес |
 |---|---|---|
 | Core-VM | Open5GS, WebUI, MongoDB | `<IP-Core-VM>`  |
-| RAN-VM | UERANSIM: gNB + UE | `<IP-RAN-VM>` |
+| RAN-VM | [UERANSIM](https://github.com/aligungr/UERANSIM): gNB + UE | `<IP-RAN-VM>` |
 
 Параметры сети 5G:
 - **PLMN**: `999/70`
@@ -84,13 +84,28 @@ WebUI доступен по адресу `http://<IP-Core-VM>:9999/`. Логин
 
 Файл `/etc/open5gs/amf.yaml`:
 
-> Подставьте актуальный <IP-Core-VM> в конфигурацию. Используемый файл приведен в configs/[amf.yaml](configs/amf.yaml)
+> Подставьте актуальный IP-Core-VM в конфигурацию. Используемый файл приведен в [configs/amf.yaml](configs/amf.yaml)
 
 ~~~yaml
 amf:
   ngap:
     server:
       - address: <IP-Core-VM>
+  guami:
+    - plmn_id:
+        mcc: 999
+        mnc: 70
+  tai:
+    - plmn_id:
+        mcc: 999
+        mnc: 70
+      tac: 1
+  plmn_support:
+    - plmn_id:
+        mcc: 999
+        mnc: 70
+      s_nssai:
+        - sst: 1
 ~~~
 
 Перезапуск:
@@ -102,7 +117,7 @@ sudo systemctl restart open5gs-amfd
 
 Файл `/etc/open5gs/upf.yaml`, секция `gtpu`:
 
-> Подставьте актуальный <IP-Core-VM> в конфигурацию. Используемый файл приведен в configs/[upf.yaml](configs/upf.yaml)
+> Подставьте актуальный IP-Core-VM в конфигурацию. Используемый файл приведен в [configs/upf.yaml](configs/upf.yaml)
 
 ~~~yaml
   gtpu:
@@ -147,9 +162,6 @@ sudo netfilter-persistent save
 | Session Type | `IPv4` |
 | SST | `1` |
 
-> WebUI подставляет демо-ключи — обязательно перезапишите их.
-
----
 
 ### 2.7. Проверка служб
 
@@ -157,9 +169,15 @@ sudo netfilter-persistent save
 systemctl status open5gs-amfd open5gs-smfd open5gs-upfd open5gs-nrfd open5gs-scpd --no-pager
 ~~~
 
-Все — `active (running)`.
+## 13. Автозапуск после перезагрузки (Core-VM)
 
----
+~~~
+sudo systemctl enable docker
+sudo systemctl enable open5gs-nrfd open5gs-scpd open5gs-amfd open5gs-smfd open5gs-upfd open5gs-ausfd open5gs-udmd open5gs-udrd open5gs-pcfd
+sudo docker update --restart=always mongodb webui
+~~~
+
+Все -- `active (running)`.
 
 ## 9. RAN-VM: сборка UERANSIM
 
@@ -251,35 +269,6 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 ping -I 10.45.0.x -c 4 8.8.8.8
 ~~~
 
----
-
-## 13. Автозапуск после перезагрузки (Core-VM)
-
-~~~
-sudo systemctl enable docker
-sudo systemctl enable open5gs-nrfd open5gs-scpd open5gs-amfd open5gs-smfd open5gs-upfd open5gs-ausfd open5gs-udmd open5gs-udrd open5gs-pcfd
-sudo docker update --restart=always mongodb webui
-~~~
-
-Правила iptables сохраняются через `netfilter-persistent save`.
-
----
-
-## 14. Типовые проблемы
-
-| Проблема | Решение |
-|---|---|
-| MongoDB не стартует (`signal=ILL`) | Docker `mongo:4.4` |
-| WebUI: `Unexpected token` при сборке | Docker-образ `higebu/open5gs-webui` |
-| WebUI: `Cannot find module .next` | Не собирать вручную; использовать Docker |
-| `docker` зависает | `pkill -9 dockerd`, перезагрузка VM |
-| Нет пакетов на `ogstun` | Явное `-o ens3` в MASQUERADE, `FORWARD -i/-o ogstun` |
-| `message too long, mtu=1200` | Вернуть MTU 1400, `ip route flush cache` на RAN-VM |
-| `Authentication Failure [MAC_FAILURE]` | Сверить K/OPc в UE и WebUI/MongoDB |
-| `DNN_NOT_SUPPORTED` | Сверить `apn` в UE и DNN в подписке |
-| `FIVEG_SERVICES_NOT_ALLOWED` | Синхронизировать SST/SD в UE и подписке |
-
----
 
 ## 15. Каталог неисправностей
 
