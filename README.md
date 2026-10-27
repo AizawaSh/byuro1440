@@ -4,10 +4,12 @@
 
 ## 1. Архитектура и параметры
 
-| Компонент | Где | Адрес |
+![Топология GNS3](images/image1.png)
+
+| Компонент | Компоненты | Адрес |
 |---|---|---|
-| Core-VM (Open5GS, WebUI, MongoDB) | GNS3 | `192.168.100.237` (или актуальный) |
-| RAN-VM (UERANSIM: gNB + UE) | GNS3 | `192.168.100.150` |
+| Core-VM | Open5GS, WebUI, MongoDB | `<IP-Core-VM>`  |
+| RAN-VM | UERANSIM: gNB + UE | `<IP-RAN-VM>` |
 
 Параметры сети 5G:
 - **PLMN**: `999/70`
@@ -18,12 +20,12 @@
 - **K**: `465B5CE8B199B49FAA5F0A2EE238A6BC`
 - **OPc**: `E8ED289DEBA952E4283B54E88E6183CA`
 
-Обе ВМ подключены к узлу **NAT** в GNS3.
+Обе ВМ подключены к узлу **NAT** в GNS3. Актуальные адреса для настроек можно узнать с помощью команды `ip addr` (интерфейс ens3).
 
 ---
 
-## 2. Core-VM: MongoDB через Docker
-
+## 2. Настройка Core-VM
+### 2.1. Настройка MongoDB через Docker
 Стандартная установка MongoDB 8.0 через `apt` не работает на процессорах без AVX (ошибка `signal=ILL`). Используется Docker-образ `mongo:4.4`.
 
 ~~~
@@ -45,9 +47,8 @@ sudo ss -tlnp | grep 27017
 
 > `mongo:4.4` — последняя версия без требования AVX. Содержит старый shell `mongo` (не `mongosh`).
 
----
 
-## 3. Core-VM: установка ядра Open5GS
+### 2.2. Установка ядра Open5GS
 
 ~~~
 sudo add-apt-repository ppa:open5gs/latest -y
@@ -55,20 +56,10 @@ sudo apt update
 sudo apt install -y open5gs
 ~~~
 
----
+### 2.3. Настройка WebUI через Docker
 
-## 4. Core-VM: WebUI через Docker
+Так как MongoDB работает через Docker невозможно собрать WebUI автоматически, так как во время сборки ищется пакет MongoDB. Сборка WebUI из исходников на Node.js 22 падает с `Unexpected token` из-за несовместимости старых зависимостей Next.js. Вследствие вышеуказаных проблем используется готовый Docker-образ.
 
-Сборка WebUI из исходников на Node.js 22 падает с `Unexpected token` из-за несовместимости старых зависимостей Next.js. Используется готовый Docker-образ.
-
-**1. Освободите порт 9999:**
-~~~
-sudo systemctl stop open5gs-webui
-sudo pkill -f "node server/index.js"
-sudo ss -tlnp | grep :9999
-~~~
-
-**2. Запустите WebUI в Docker:**
 ~~~
 sudo docker rm -f webui 2>/dev/null
 sudo docker run -d --name webui --restart=always \
@@ -77,9 +68,9 @@ sudo docker run -d --name webui --restart=always \
   higebu/open5gs-webui:v2.8.0
 ~~~
 
-> Подставьте актуальный IP Core-VM в `DB_URI`.
+> Подставьте актуальный <IP-Core-VM> в `DB_URI`.
 
-**3. Проверка:**
+Проверка:
 ~~~
 sudo docker ps | grep webui
 sudo docker logs webui --tail 20
@@ -87,32 +78,19 @@ sudo docker logs webui --tail 20
 
 WebUI доступен по адресу `http://<IP-Core-VM>:9999/`. Логин `admin`, пароль `1423`.
 
----
+![WebUI](images/image2.png)
 
-## 5. Core-VM: настройка AMF
+### 2.4. Настройка AMF
 
 Файл `/etc/open5gs/amf.yaml`:
+
+> Подставьте актуальный <IP-Core-VM> в конфигурацию. Используемый файл приведен в configs/[amf.yaml](configs/amf.yaml)
 
 ~~~yaml
 amf:
   ngap:
     server:
       - address: <IP-Core-VM>
-  guami:
-    - plmn_id:
-        mcc: 999
-        mnc: 70
-  tai:
-    - plmn_id:
-        mcc: 999
-        mnc: 70
-      tac: 1
-  plmn_support:
-    - plmn_id:
-        mcc: 999
-        mnc: 70
-      s_nssai:
-        - sst: 1
 ~~~
 
 Перезапуск:
@@ -120,11 +98,11 @@ amf:
 sudo systemctl restart open5gs-amfd
 ~~~
 
----
-
-## 6. Core-VM: настройка UPF и NAT
+### 2.5. Настройка UPF и NAT
 
 Файл `/etc/open5gs/upf.yaml`, секция `gtpu`:
+
+> Подставьте актуальный <IP-Core-VM> в конфигурацию. Используемый файл приведен в configs/[upf.yaml](configs/upf.yaml)
 
 ~~~yaml
   gtpu:
@@ -137,7 +115,7 @@ sudo systemctl restart open5gs-amfd
 sudo systemctl restart open5gs-upfd
 ~~~
 
-**NAT и форвардинг:**
+NAT и форвардинг:
 ~~~
 sudo sysctl -w net.ipv4.ip_forward=1
 echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
@@ -153,11 +131,10 @@ sudo netfilter-persistent save
 
 > Явное `-o ens3` в MASQUERADE критично: без него трафик UE часто не уходит в интернет.
 
----
 
-## 7. Core-VM: добавление абонента
+### 2.6. Добавление абонента
 
-**Вариант А — через WebUI** (`http://<IP>:9999/`, `admin`/`1423`):
+Через WebUI (`http://<IP-Core-VM>:9999/`, `admin`/`1423`):
 
 | Поле | Значение |
 |---|---|
@@ -172,20 +149,9 @@ sudo netfilter-persistent save
 
 > WebUI подставляет демо-ключи — обязательно перезапишите их.
 
-**Вариант Б — через MongoDB:**
-~~~
-sudo docker exec -i mongodb mongo open5gs --eval '
-db.subscribers.insertOne({
-  imsi: "999700000000001",
-  security: { k: "465B5CE8B199B49FAA5F0A2EE238A6BC", op: null, opc: "E8ED289DEBA952E4283B54E88E6183CA", amf: "8000", sqn: NumberLong(0) },
-  ambr: { downlink: { value: 1, unit: 3 }, uplink: { value: 1, unit: 3 } },
-  slice: [{ sst: 1, session: [{ name: "internet", type: 3, qos: { arp: { priority_level: 15, pre_emption_capability: 1, pre_emption_vulnerability: 1 } } }] }]
-})'
-~~~
-
 ---
 
-## 8. Core-VM: проверка служб
+### 2.7. Проверка служб
 
 ~~~
 systemctl status open5gs-amfd open5gs-smfd open5gs-upfd open5gs-nrfd open5gs-scpd --no-pager
@@ -202,13 +168,6 @@ sudo apt update
 sudo apt install -y make g++ libsctp-dev lksctp-tools iproute2 git cmake
 git clone https://github.com/aligungr/UERANSIM
 cd UERANSIM
-make -j$(nproc)
-~~~
-
-Если `cmake` старый:
-~~~
-sudo snap install cmake --classic
-export PATH=$PATH:/snap/bin
 make -j$(nproc)
 ~~~
 
