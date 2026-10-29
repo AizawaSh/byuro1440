@@ -12,8 +12,8 @@
   <colgroup>
     <col width="15%">
     <col width="20%">
-    <col width="45%">
-    <col width="20%">
+    <col width="40%">
+    <col width="25%">
   </colgroup>
   <tr>
     <th align="left">Компонент</th>
