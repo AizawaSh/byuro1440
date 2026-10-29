@@ -8,32 +8,10 @@
   <img src="images/image1.png" alt="Топология GNS3" />
 </p>
 
-<table>
-  <colgroup>
-    <col width="15%">
-    <col width="20%">
-    <col width="40%">
-    <col width="25%">
-  </colgroup>
-  <tr>
-    <th align="left">Компонент</th>
-    <th align="left">Роль</th>
-    <th align="left">Компоненты</th>
-    <th align="left">Адрес</th>
-  </tr>
-  <tr>
-    <td>Core-VM</td>
-    <td>Ядро сети 5G</td>
-    <td>Open5GS (AMF, SMF, UPF, NRF, SCP, AUSF, UDM, UDR, PCF), WebUI, MongoDB</td>
-    <td><code>&lt;IP-Core-VM&gt;</code></td>
-  </tr>
-  <tr>
-    <td>RAN-VM</td>
-    <td>Базовая станция и абонент</td>
-    <td><a href="https://github.com/aligungr/UERANSIM">UERANSIM</a>: gNB + UE</td>
-    <td><code>&lt;IP-RAN-VM&gt;</code></td>
-  </tr>
-</table>
+| Компонент | Роль | Компоненты | Адрес |
+|---|---|---|---|
+| Core-VM | Ядро сети 5G | Open5GS (AMF, SMF,UPF, NRF, SCP, AUSF,<br>UDM, UDR, PCF),WebUI, MongoDB | `<IP-Core-VM>` |
+| RAN-VM | Базовая станция и абонент | [UERANSIM](https://github.com/aligungr/UERANSIM): gNB + UE | `<IP-RAN-VM>` |
 
 Параметры сети 5G:
 - **PLMN**: `999/70`
