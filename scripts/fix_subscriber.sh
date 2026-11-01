@@ -3,12 +3,13 @@ set -e
 
 BACKUP_DIR="/tmp/open5gs_backup"
 
-if [ ! -d "$BACKUP_DIR" ]; then
-  echo "Бэкап не найден: $BACKUP_DIR"
+# Проверяем наличие бэкапа ВНУТРИ контейнера
+if ! docker exec -i mongodb test -d "$BACKUP_DIR"; then
+  echo "Бэкап не найден внутри контейнера: $BACKUP_DIR"
   exit 1
 fi
 
-echo "Восстанавливаем абонентов из $BACKUP_DIR..."
+echo "Восстанавливаем абонентов..."
 docker exec -i mongodb mongorestore -d open5gs -c subscribers "$BACKUP_DIR/open5gs/subscribers.bson"
 
 echo "Проверка:"
