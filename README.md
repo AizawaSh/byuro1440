@@ -283,24 +283,6 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 ping -I 10.45.0.x -c 4 8.8.8.8
 ~~~
 
-
-## 16. Wireshark: где смотреть неисправности
-
-| Неисправность | Интерфейс | Фильтр | Что искать |
-|---|---|---|---|
-| Неверный DNN | Core-VM `ens3` | `ngap` / поиск hex `77726f6e675f646e6e` | `wrong_dnn` в `UplinkNASTransport` |
-| Ключи (K/OPc) | Core-VM `ens3` | `nas_5gs` | `Authentication Failure`, cause #20 |
-| PLMN | Core-VM `ens3` | `ngap` | `NG Setup Failure`, `PLMN-ID is foreign` |
-| MTU | Core-VM `ogstun` | `icmp` | Крупные пакеты не доходят / нет ответа |
-| Маршрут | RAN-VM `uesimtun0` | `icmp` | Пакетов нет вообще |
-| NRF | Core-VM `ens3` | `tcp.port == 7777` | `RST` или таймаут к NRF/SCP |
-| Абонент | Core-VM `ens3` | `nas_5gs` | `Registration Reject` (#3/#7) |
-| PCF | Core-VM `ens3` | `http2` | Таймаут запроса к PCF |
-| SMF | Core-VM `ens3` | `http2` | Таймаут `CreateSMContext` |
-| AMF | Core-VM `ens3` | `sctp.port == 38412` | Разрыв SCTP, нет ответов |
-
----
-
 ## 14. Зеркалирование трафика на dummy0 для Wireshark
 
 Чтобы в одном дампе видеть и сигнализацию N2/NAS (с `ens3`), и внутреннюю сигнализацию SBI/HTTP2 (с `lo`), используется зеркалирование через `tc mirred`. Создаётся фиктивный интерфейс `dummy0`, на который копируются только пакеты 5G (по портам).
@@ -439,7 +421,6 @@ tc filter show dev lo ingress
 
 Выбирайте интерфейс **`dummy0`**. Для HTTP/2 не забудьте:
 - Правой кнопкой на пакете с портом `7777` → **`Decode As...`** → **`HTTP2`** → **`Save`**.
-~~~
 
 ### 📌 Как вставить
 
