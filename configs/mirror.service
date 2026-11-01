@@ -1,0 +1,12 @@
+[Unit]
+Description=Mirror ingress+egress traffic from ens3 and lo to dummy0
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/setup_mirror.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
