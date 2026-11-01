@@ -284,6 +284,244 @@ ping -I 10.45.0.x -c 4 8.8.8.8
 ~~~
 
 
+## 16. Wireshark: где смотреть неисправности
+
+| Неисправность | Интерфейс | Фильтр | Что искать |
+|---|---|---|---|
+| Неверный DNN | Core-VM `ens3` | `ngap` / поиск hex `77726f6e675f646e6e` | `wrong_dnn` в `UplinkNASTransport` |
+| Ключи (K/OPc) | Core-VM `ens3` | `nas_5gs` | `Authentication Failure`, cause #20 |
+| PLMN | Core-VM `ens3` | `ngap` | `NG Setup Failure`, `PLMN-ID is foreign` |
+| MTU | Core-VM `ogstun` | `icmp` | Крупные пакеты не доходят / нет ответа |
+| Маршрут | RAN-VM `uesimtun0` | `icmp` | Пакетов нет вообще |
+| NRF | Core-VM `ens3` | `tcp.port == 7777` | `RST` или таймаут к NRF/SCP |
+| Абонент | Core-VM `ens3` | `nas_5gs` | `Registration Reject` (#3/#7) |
+| PCF | Core-VM `ens3` | `http2` | Таймаут запроса к PCF |
+| SMF | Core-VM `ens3` | `http2` | Таймаут `CreateSMContext` |
+| AMF | Core-VM `ens3` | `sctp.port == 38412` | Разрыв SCTP, нет ответов |
+
+---
+
+## 14. Зеркалирование трафика на dummy0 для Wireshark
+
+Чтобы в одном дампе видеть и сигнализацию N2/NAS (с `ens3`), и внутреннюю сигнализацию SBI/HTTP2 (с `lo`), используется зеркалирование через `tc mirred`. Создаётся фиктивный интерфейс `dummy0`, на который копируются только пакеты 5G (по портам).
+
+### 14.1. Скрипт `setup_mirror.sh`
+
+Создайте файл:
+
+~~~
+sudo nano /usr/local/bin/setup_mirror.sh
+~~~
+
+Содержимое:
+
+~~~bash
+#!/bin/bash
+set -e
+
+DUMMY="dummy0"
+
+# 1. Создать dummy0, если его нет
+if ! ip link show "$DUMMY" &>/dev/null; then
+    ip link add "$DUMMY" type dummy
+fi
+ip link set "$DUMMY" up
+
+# 2. Очистить старые настройки
+for IFACE in ens3 lo; do
+    tc qdisc del dev "$IFACE" clsact 2>/dev/null || true
+done
+
+# 3. ens3: N2 (SCTP 38412) и N3 (UDP 2152)
+tc qdisc add dev ens3 clsact
+
+tc filter add dev ens3 ingress protocol ip u32 \
+    match ip protocol 132 0xff \
+    match ip dport 38412 0xffff \
+    action mirred egress mirror dev "$DUMMY"
+tc filter add dev ens3 ingress protocol ip u32 \
+    match ip protocol 17 0xff \
+    match ip dport 2152 0xffff \
+    action mirred egress mirror dev "$DUMMY"
+
+tc filter add dev ens3 egress protocol ip u32 \
+    match ip protocol 132 0xff \
+    match ip sport 38412 0xffff \
+    action mirred egress mirror dev "$DUMMY"
+tc filter add dev ens3 egress protocol ip u32 \
+    match ip protocol 17 0xff \
+    match ip sport 2152 0xffff \
+    action mirred egress mirror dev "$DUMMY"
+
+# 4. lo: SBI (TCP 7777) и N4 (UDP 8805)
+tc qdisc add dev lo clsact
+
+tc filter add dev lo ingress protocol ip u32 \
+    match ip protocol 6 0xff \
+    match ip dport 7777 0xffff \
+    action mirred egress mirror dev "$DUMMY"
+tc filter add dev lo ingress protocol ip u32 \
+    match ip protocol 17 0xff \
+    match ip dport 8805 0xffff \
+    action mirred egress mirror dev "$DUMMY"
+
+tc filter add dev lo egress protocol ip u32 \
+    match ip protocol 6 0xff \
+    match ip sport 7777 0xffff \
+    action mirred egress mirror dev "$DUMMY"
+tc filter add dev lo egress protocol ip u32 \
+    match ip protocol 17 0xff \
+    match ip sport 8805 0xffff \
+    action mirred egress mirror dev "$DUMMY"
+
+echo "Зеркалирование только 5G-трафика настроено на $DUMMY."
+~~~
+
+Сделайте исполняемым:
+
+~~~
+sudo chmod +x /usr/local/bin/setup_mirror.sh
+~~~
+
+### 14.2. Автозапуск через systemd
+
+Создайте unit:
+
+~~~
+sudo nano /etc/systemd/system/mirror.service
+~~~
+
+Содержимое:
+
+~~~ini
+[Unit]
+Description=Mirror 5G traffic (ens3, lo) to dummy0
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/setup_mirror.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+~~~
+
+Активируйте:
+
+~~~
+sudo systemctl daemon-reload
+sudo systemctl enable --now mirror.service
+~~~
+
+Проверка:
+
+~~~
+sudo systemctl status mirror.service
+ip link show dummy0
+tc filter show dev ens3 ingress
+tc filter show dev lo ingress
+~~~
+
+### 14.3. Что попадает на dummy0
+
+| Источник | Порт | Протокол | Что это |
+|---|---|---|---|
+| `ens3` | SCTP 38412 | NGAP/NAS | Сигнализация N2 (gNB ↔ AMF) |
+| `ens3` | UDP 2152 | GTP-U | Пользовательская плоскость N3 (gNB ↔ UPF) |
+| `lo` | TCP 7777 | HTTP/2 | SBI (AMF, SMF, PCF, NRF, SCP) |
+| `lo` | UDP 8805 | PFCP | Сигнализация N4 (SMF ↔ UPF) |
+
+Лишний трафик (MongoDB `27017`, DNS `53`, WebUI `9999`) на `dummy0` **не попадает**.
+
+### 14.4. Захват в Wireshark
+
+Выбирайте интерфейс **`dummy0`**. Для HTTP/2 не забудьте:
+- Правой кнопкой на пакете с портом `7777` → **`Decode As...`** → **`HTTP2`** → **`Save`**.
+~~~
+
+### 📌 Как вставить
+
+Этот блок логично поставить **после раздела 13** (автозапуск) и **до раздела про Wireshark** (бывший 16/17). Если нумерация сдвинется — просто поправьте заголовки (`## 14`, `## 15` и т.д.) вручную.
+
+Если хотите, могу прислать **полный README целиком** (с этим разделом и разделом про имена/фильтры), чтобы вы скопировали один блок и не собирали по частям.
+
+
+---
+
+## 17. Wireshark: имена сетевых функций и фильтрация
+
+Чтобы в дампе вместо IP-адресов отображались имена (`AMF`, `SMF`, `UPF` и т.д.), а фильтры работали по этим именам, нужно один раз настроить файл `hosts` Wireshark и включить разрешение имён.
+
+### 17.1. Файл `hosts` Wireshark
+
+1. В Wireshark: **`Help` → `About Wireshark` → `Folders`** → найдите строку **`Personal configuration`** (обычно `~/.config/wireshark/`).
+2. Создайте в этой папке файл **`hosts`** (без расширения) со следующим содержимым:
+
+~~~
+127.0.0.2    MME
+127.0.0.3    SGW-C
+127.0.0.4    SMF
+127.0.0.5    AMF
+127.0.0.6    SGW-U
+127.0.0.7    UPF
+127.0.0.8    HSS
+127.0.0.9    PCRF
+127.0.0.10   NRF
+127.0.0.11   AUSF
+127.0.0.12   UDM
+127.0.0.13   PCF
+127.0.0.14   NSSF
+127.0.0.15   BSF
+127.0.0.20   UDR
+127.0.0.200  SCP
+127.0.1.250  SEPP1
+127.0.2.250  SEPP2
+192.168.100.196  Core-VM
+192.168.100.172  RAN-VM
+~~~
+
+> Подставьте актуальные IP ваших ВМ. Адреса `127.0.0.x` — стандартные для Open5GS.
+
+### 17.2. Включение разрешения имён
+
+1. **`Edit` → `Preferences` → `Name Resolution`**.
+2. Поставьте галочку **`Resolve network (IP) addresses`**.
+3. Нажмите **OK**.
+
+После этого в колонках Source и Destination появятся имена (`AMF`, `SMF`, `UPF`), а не IP.
+
+### 17.3. Фильтрация по именам
+
+Используйте поля с суффиксом `_host`:
+
+| Фильтр | Что покажет |
+|---|---|
+| `ip.src_host == "AMF"` | Пакеты, где источник — AMF |
+| `ip.dst_host == "UPF"` | Пакеты, где назначение — UPF |
+| `ip.host == "SMF"` | Пакеты, где участвует SMF (источник или назначение) |
+| `ip.host == "SMF" \|\| ip.host == "PCF"` | Пакеты с участием SMF или PCF |
+
+Пример: только 5G-трафик с участием AMF, SMF или UPF:
+
+~~~
+(ngap || nas-5gs || pfcp || gtp) && (ip.host == "AMF" || ip.host == "SMF" || ip.host == "UPF")
+~~~
+
+> ⚠️ Фильтры по именам работают **только как display filter** в Wireshark. Capture filter (до начала записи) имена из файла `hosts` Wireshark не видит — используйте там IP или порты.
+
+### 17.4. Если HTTP/2 не распознаётся
+
+Порт SBI (`7777`) нестандартный, поэтому Wireshark не декодирует его как HTTP/2 автоматически:
+
+1. Кликните правой кнопкой на пакете с портом `7777` → **`Decode As...`**.
+2. Выберите **`HTTP2`**.
+3. Нажмите **`Save`** (не просто OK), чтобы правило сохранилось между сессиями.
+
+После этого фильтр `http2` будет работать, а в дампе появятся читаемые SBI-запросы (PCF, SMF, NRF).
+
+
 ## 15. Каталог неисправностей
 
 На стенде воспроизведены и описаны:
@@ -302,19 +540,3 @@ ping -I 10.45.0.x -c 4 8.8.8.8
 Для каждой подготовлены скрипты `break_*.sh` / `fix_*.sh` и шаблон описания.
 
 ---
-
-## 16. Wireshark: где смотреть неисправности
-
-| Неисправность | Интерфейс | Фильтр | Что искать |
-|---|---|---|---|
-| Неверный DNN | Core-VM `ens3` | `ngap` / поиск hex `77726f6e675f646e6e` | `wrong_dnn` в `UplinkNASTransport` |
-| Ключи (K/OPc) | Core-VM `ens3` | `nas_5gs` | `Authentication Failure`, cause #20 |
-| PLMN | Core-VM `ens3` | `ngap` | `NG Setup Failure`, `PLMN-ID is foreign` |
-| MTU | Core-VM `ogstun` | `icmp` | Крупные пакеты не доходят / нет ответа |
-| Маршрут | RAN-VM `uesimtun0` | `icmp` | Пакетов нет вообще |
-| NRF | Core-VM `ens3` | `tcp.port == 7777` | `RST` или таймаут к NRF/SCP |
-| Абонент | Core-VM `ens3` | `nas_5gs` | `Registration Reject` (#3/#7) |
-| PCF | Core-VM `ens3` | `http2` | Таймаут запроса к PCF |
-| SMF | Core-VM `ens3` | `http2` | Таймаут `CreateSMContext` |
-| AMF | Core-VM `ens3` | `sctp.port == 38412` | Разрыв SCTP, нет ответов |
-
