@@ -2,25 +2,9 @@
 
 ### 1. Скрипты
 
-**`break_dnn.sh`** (RAN-VM):
-~~~bash
-#!/bin/bash
-UE_CONFIG="$HOME/UERANSIM/config/open5gs-ue.yaml"
-BACKUP="${UE_CONFIG}.bak"
-[ ! -f "$BACKUP" ] && cp "$UE_CONFIG" "$BACKUP"
+**`break_dnn.sh`**
 
-sed -i 's/apn: .*/apn: "wrong_dnn"/' "$UE_CONFIG"
-echo "DNN изменён на wrong_dnn. Перезапустите UE."
-~~~
-
-**`fix_dnn.sh`** (RAN-VM):
-~~~bash
-#!/bin/bash
-UE_CONFIG="$HOME/UERANSIM/config/open5gs-ue.yaml"
-BACKUP="${UE_CONFIG}.bak"
-cp "$BACKUP" "$UE_CONFIG"
-echo "DNN восстановлен. Перезапустите UE."
-~~~
+**`fix_dnn.sh`**
 
 ### 2. Воспроизведение
 
@@ -39,7 +23,12 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 ~~~
 [nas] [error] MM status received with cause [DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED]
 ~~~
-Это прямая причина отказа: сеть сообщает, что запрошенный DNN не поддерживается или не прописан в подписке [citation:2][citation:6].
+
+<p align="center">
+  <img src="../images/break_dnn_ue.png" alt="break_dnn_ue" />
+</p>
+
+Это прямая причина отказа: сеть сообщает, что запрошенный DNN не поддерживается или не прописан в подписке.
 
 #### Логи AMF (Core-VM)
 
@@ -48,25 +37,26 @@ sudo grep -i "DNN\|Not Subscribed" /var/log/open5gs/amf.log | tail -20
 ~~~
 Ищите строку:
 ~~~
-DNN[wrong_dnn] is not supported or not subscribed in the slice
+DNN "wrong_dnn" Not Supported OR Not Subscribed in the Slice
 ~~~
-Это подтверждает, что AMF отклонил выбор SMF для данного DNN [citation:2][citation:6].
+<p align="center">
+  <img src="../images/break_dnn_amf.png" alt="break_dnn_amf" />
+</p>
+
+Это подтверждает, что AMF отклонил выбор SMF для данного DNN.
 
 #### Wireshark (захват на dummy0)
 
-**Фильтр для поиска DNN в трафике:**
-~~~
-frame contains 77:72:6f:6e:67:5f:64:6e:6e
-~~~
-(`77 72 6f 6e 67 5f 64 6e 6e` — hex-представление ASCII-строки `wrong_dnn`.)
 
 **Где именно смотреть:**
-1. Найдите пакет `UplinkNASTransport` (NGAP, procedureCode 46).
-2. Внутри него — `NAS-PDU` → `Security protected NAS 5GS message`.
+1. Найдите пакет `UplinkNASTransport`.
+2. Внутри него — `NAS-PDU`.
 3. В **hex-дампе** ближе к концу пакета вы увидите последовательность `...09 77 72 6f 6e 67 5f 64 6e 6e`.
 4. Это и есть запрошенный DNN `wrong_dnn`.
 
-> **Важно**: NAS-сообщение может быть помечено как «Integrity protected and ciphered», но в реализации UERANSIM/Open5GS DNN в этом конкретном месте часто остаётся в открытом виде — поэтому hex-поиск работает.
+<p align="center">
+  <img src="../images/break_dnn_dump.png" alt="break_dnn_dump" />
+</p>
 
 **Альтернативно (если DNN зашифрован):** ищите пакет `5GMM Status` (message type `0x59` или `0x7e` с cause `DNN_NOT_SUPPORTED`). Причина отказа в нём также видна в открытом виде.
 
@@ -90,8 +80,7 @@ ping -I 10.45.0.x -c 2 8.8.8.8
 |---|---|
 | **Название** | Неверный DNN (Data Network Name) |
 | **Симптом в логах UE** | `MM status received with cause [DNN_NOT_SUPPORTED_OR_NOT_SUBSCRIBED]` |
-| **Симптом в логах AMF** | `DNN[wrong_dnn] is not supported or not subscribed in the slice` |
+| **Симптом в логах AMF** | `DNN "wrong_dnn" Not Supported OR Not Subscribed in the Slice` |
 | **Симптом в Wireshark** | В `UplinkNASTransport` (NGAP) внутри NAS-PDU в hex виден `wrong_dnn` (`77 72 6f 6e 67 5f 64 6e 6e`) |
 | **Поведение абонента** | Регистрация проходит, PDU-сессия не устанавливается, `uesimtun0` не поднимается |
 | **Локализация** | Сравнить `apn` в `open5gs-ue.yaml` с DNN в подписке WebUI/MongoDB |
-| **Устранение** | Вернуть `apn: internet` (`fix_dnn.sh`), перезапустить UE |
