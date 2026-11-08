@@ -2,9 +2,9 @@
 
 ### 1. Скрипты
 
-**`break_dnn.sh`**
+[**`break_dnn.sh`**](../scripts/break_dnn.sh)
 
-**`fix_dnn.sh`**
+[**`fix_dnn.sh`**](../scripts/fix_dnn.sh)
 
 ### 2. Воспроизведение
 
@@ -74,7 +74,7 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 ping -I 10.45.0.x -c 2 8.8.8.8
 ~~~
 
-### 5. Сводная таблица для каталога
+### 5. Сводная таблица
 
 | Поле | Содержание |
 |---|---|

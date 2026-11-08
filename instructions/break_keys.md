@@ -2,9 +2,9 @@
 
 ### 1. Скрипты
 
-**`break_keys.sh`** (RAN-VM):
+[**`break_keys.sh`**](../scripts/break_keys.sh)
 
-**`fix_keys.sh`** (RAN-VM):
+[**`fix_keys.sh`**](../scripts/break_keys.sh)
 
 ### 2. Воспроизведение
 
@@ -77,7 +77,7 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 ping -I 10.45.0.x -c 2 8.8.8.8
 ~~~
 
-### 5. Сводная таблица для каталога
+### 5. Сводная таблица
 
 | Поле | Содержание |
 |---|---|

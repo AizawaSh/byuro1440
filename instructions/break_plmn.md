@@ -2,29 +2,9 @@
 
 ### 1. Скрипты
 
-**`break_plmn.sh`** (RAN-VM):
-~~~bash
-#!/bin/bash
-GNB_CONFIG="$HOME/UERANSIM/config/open5gs-gnb.yaml"
-BACKUP="${GNB_CONFIG}.bak"
-[ ! -f "$BACKUP" ] && cp "$GNB_CONFIG" "$BACKUP"
+[**`break_plmn.sh`**](../scripts/break_plmn.sh)
 
-# Меняем PLMN в gNB на другой (001/01 вместо 999/70)
-sed -i -E "s/^mcc:.*/mcc: '001'/" "$GNB_CONFIG"
-sed -i -E "s/^mnc:.*/mnc: '01'/" "$GNB_CONFIG"
-
-echo "PLMN в gNB изменён. Проверьте:"
-grep -nE "^mcc:|^mnc:" "$GNB_CONFIG"
-~~~
-
-**`fix_plmn.sh`** (RAN-VM):
-~~~bash
-#!/bin/bash
-GNB_CONFIG="$HOME/UERANSIM/config/open5gs-gnb.yaml"
-BACKUP="${GNB_CONFIG}.bak"
-cp "$BACKUP" "$GNB_CONFIG"
-echo "PLMN восстановлен. Перезапустите gNB."
-~~~
+[**`fix_plmn.sh`**](../scripts/fix_plmn.sh)
 
 ### 2. Воспроизведение
 
@@ -48,27 +28,39 @@ sudo grep -i "plmn\|ng.setup\|fail" /var/log/open5gs/amf.log | tail -20
 [amf] WARNING: NG-Setup failure:
 [amf] WARNING:     globalGNB_ID PLMN-ID is foreign
 ~~~
-Это прямое указание на то, что PLMN, который прислал gNB, не совпадает с тем, что настроен в AMF [citation:12].
+
+<p align="center">
+  <img src="../images/break_plmn_amf.png" alt="break_plmn_ue" />
+</p>
+
+Это прямое указание на то, что PLMN, который прислал gNB, не совпадает с тем, что настроен в AMF.
 
 #### Логи gNB (RAN-VM)
 
 В терминале, где запущен gNB, после отправки `NG Setup Request` вы не увидите `NG Setup procedure is successful`. Вместо этого будет ошибка или таймаут.
 
-#### Wireshark (захват на dummy0)
+<p align="center">
+  <img src="../images/break_plmn_gnb.png" alt="break_plmn_gnb" />
+</p>
 
-**Фильтр для поиска NG Setup:**
-~~~
-ngap.procedureCode == 21
-~~~
-(21 — `NGSetup`)
+#### Wireshark (захват на dummy0)
 
 **Где именно смотреть:**
 1. Найдите пакет `NGSetupRequest` (от gNB к AMF).
-2. Внутри него разверните `GlobalRANNodeID` → `GlobalGNB-ID` → `PLMNIdentity`. Вы увидите `mcc=001, mnc=01` (или те, что вы указали в скрипте).
-3. Следом должен идти пакет **`NGSetupFailure`** (от AMF к gNB).
-4. В `NGSetupFailure` разверните `Cause`. Причина будет связана с PLMN (например, `misc` или `plmn-not-served`) [citation:4].
+2. Внутри него разверните `GlobalRANNodeID` → `GlobalGNB-ID` → `PLMNIdentity`. Вы увидите `mcc=xxx, mnc=xx`.
 
-> **Важно**: Если AMF настроен корректно, но в его конфигурации `plmn_support` нет PLMN, который прислал gNB, NG Setup будет отклонён. Это соответствует 3GPP TS 38.413: AMF должен отклонить процедуру, если не может обслуживать ни один из PLMN, указанных gNB [citation:12].
+<p align="center">
+  <img src="../images/break_plmn_dump1.png" alt="break_plmn_dump1" />
+</p>
+
+3. Следом должен идти пакет **`NGSetupFailure`** (от AMF к gNB).
+4. В `NGSetupFailure` разверните `Cause`.
+
+<p align="center">
+  <img src="../images/break_plmn_dump2.png" alt="break_plmn_dump2" />
+</p>
+
+> **Важно**: Если AMF настроен корректно, но в его конфигурации `plmn_support` нет PLMN, который прислал gNB, NG Setup будет отклонён.
 
 ### 4. Устранение
 
@@ -83,15 +75,18 @@ sudo ./build/nr-gnb -c config/open5gs-gnb.yaml
 ~~~bash
 sudo ./build/nr-ue -c config/open5gs-ue.yaml
 ~~~
+После перезапуска дождитесь `PDU Session establishment is successful` и `TUN interface[uesimtun0, ...] is up`, затем проверьте:
+~~~bash
+ping -I 10.45.0.x -c 2 8.8.8.8
+~~~
 
-### 5. Сводная таблица для каталога
+### 5. Сводная таблица
 
 | Поле | Содержание |
 |---|---|
 | **Название** | Несовпадение PLMN между gNB и AMF |
-| **Симптом в логах AMF** | `NG-Setup failure:`, `globalGNB_ID PLMN-ID is foreign` |
+| **Симптом в логах AMF** | `NG-Setup failure:` <br> `globalGNB_ID PLMN-ID is foreign` |
 | **Симптом в логах gNB** | Нет `NG Setup procedure is successful`, ошибка или таймаут |
 | **Симптом в Wireshark** | `NGSetupRequest` содержит PLMN, отличный от AMF; ответ — `NGSetupFailure` с причиной, связанной с PLMN |
 | **Поведение абонента** | gNB не подключается к Core, UE не видит сеть или не может зарегистрироваться |
 | **Локализация** | Сравнить `mcc`/`mnc` в `open5gs-gnb.yaml` и в `amf.yaml` (секции `guami`, `tai`, `plmn_support`) |
-| **Устранение** | Вернуть корректный PLMN в gNB (`fix_plmn.sh`), перезапустить gNB |

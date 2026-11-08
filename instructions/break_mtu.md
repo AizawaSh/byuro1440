@@ -2,21 +2,9 @@
 
 ### 1. Скрипты
 
-**`break_mtu.sh`** (Core-VM):
-~~~bash
-#!/bin/bash
-sudo ip link set dev ogstun mtu 1200
-echo "MTU на ogstun изменён на 1200."
-ip link show ogstun | grep mtu
-~~~
+[**`break_mtu.sh`**](../scripts/break_mtu.sh)
 
-**`fix_mtu.sh`** (Core-VM):
-~~~bash
-#!/bin/bash
-sudo ip link set dev ogstun mtu 1400
-echo "MTU на ogstun восстановлен (1400)."
-ip link show ogstun | grep mtu
-~~~
+[**`fix_mtu.sh`** ](../scripts/fix_mtu.sh)
 
 > На RAN-VM перед проверкой убедитесь, что MTU на `uesimtun0` не меньше 1400:
 > ~~~bash
@@ -43,25 +31,35 @@ ping -I 10.45.0.x -s 1300 -M do -c 4 8.8.8.8
 
 #### Логи UE (RAN-VM)
 
-При отправке крупного пакета с `-M do` ядро RAN-VM возвращает локальную ошибку **до** отправки пакета в туннель:
+При отправке крупного пакета с `-M do` ядро RAN-VM возвращает локальную ошибку до отправки пакета в туннель:
 ~~~
 ping: local error: message too long, mtu=1200
 ~~~
+
+<p align="center">
+  <img src="../images/break_mtu_ping.png" alt="break_mtu_ping" />
+</p>
+
 Это означает, что ядро RAN-VM знает эффективный MTU пути (1200, от `ogstun`) и отказывается отправлять пакет с DF, который не влезает в этот MTU.
 
 #### Wireshark (захват на dummy0)
 
-**Фильтр:**
-~~~
-icmp
-~~~
-
 **Что искать:**
-- На `ogstun` (если захватывать там) крупные ICMP-запросы **отсутствуют** — они отбрасываются на RAN-VM.
-- Мелкие ICMP-запросы (`-s 100`) проходят нормально.
-- Если отправлять крупные пакеты **без** `-M do` (разрешив фрагментацию), на `ogstun` можно увидеть фрагментированные пакеты, но ответы могут не возвращаться.
 
-> **Важно**: Это классический «blackhole MTU» — handshake и мелкие пакеты проходят, а крупные данные (HTTP, загрузки) зависают. В Wireshark на `dummy0` вы не увидите крупных пакетов от UE, потому что они отбрасываются локально на RAN-VM.
+- Крупные ICMP-запросы не получают ответа.
+
+<p align="center">
+  <img src="../images/break_mtu_dump1.png" alt="break_mtu_dump1" />
+</p>
+
+- Мелкие ICMP-запросы (`-s 100`) проходят нормально.
+- Если отправлять крупные пакеты без `-M do` (разрешив фрагментацию), можно увидеть фрагментированные пакеты, но ответы могут не возвращаться.
+
+<p align="center">
+  <img src="../images/break_mtu_dump2.png" alt="break_mtu_dump2" />
+</p>
+
+> **Важно**: Это классический «blackhole MTU» — handshake и мелкие пакеты проходят, а крупные данные (HTTP, загрузки) зависают.
 
 #### Проверка MTU на интерфейсах
 
@@ -72,9 +70,12 @@ ip link show ogstun | grep mtu   # должно быть 1200 (сломано)
 
 На RAN-VM:
 ~~~bash
-ip link show uesimtun0 | grep mtu   # обычно 1400
+ip link show ens3 | grep mtu   # обычно 1400
 ip route get 8.8.8.8 from 10.45.0.x   # показывает эффективный MTU пути
 ~~~
+<p align="center">
+  <img src="../images/break_mtu_ran.png" alt="break_mtu_ping" />
+</p>
 
 ### 4. Устранение
 
@@ -92,9 +93,8 @@ sudo ip route flush cache
 ~~~bash
 ping -I 10.45.0.x -s 1300 -M do -c 4 8.8.8.8
 ~~~
-Теперь пакет должен пройти.
 
-### 5. Сводная таблица для каталога
+### 5. Сводная таблица
 
 | Поле | Содержание |
 |---|---|

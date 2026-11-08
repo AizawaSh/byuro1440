@@ -183,12 +183,12 @@ sudo netfilter-persistent save
 </p>
 
 <p align="center">
-  <img src="images/image3.png" alt="WebUI1" width="70%" />
+  <img src="images/image3.png" alt="WebUI1"/>
 </p>
 
 
 <p align="center">
-  <img src="images/image4.png" alt="WebUI2" width="70%" />
+  <img src="images/image4.png" alt="WebUI2"/>
 </p>
 
 ### 2.8. Проверка служб
@@ -349,7 +349,7 @@ tc filter show dev lo ingress
 
 ---
 
-## 5.3. Имена сетевых функций и фильтрация
+### 5.3. Имена сетевых функций и фильтрация
 
 Чтобы в дампе вместо IP-адресов отображались имена (`AMF`, `SMF`, `UPF` и т.д.), а фильтры работали по этим именам, нужно один раз настроить файл `hosts` Wireshark и включить разрешение имён.
 
@@ -391,8 +391,8 @@ tc filter show dev lo ingress
 
 1. [Неверный DNN](instructions/break_dnn.md)
 2. [Рассогласование ключей (K/OPc)](instructions/break_keys.md)
-3. Несовпадение PLMN
-4. Некорректный MTU
+3. [Несовпадение PLMN](instructions/break_plmn.md)
+4. [Некорректный MTU](instructions/break_mtu.md)
 5. Потерянный маршрут
 6. Отсутствующий абонент в WebUI
 7. Недоступность PCF
