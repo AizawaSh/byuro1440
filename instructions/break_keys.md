@@ -4,7 +4,7 @@
 
 [**`break_keys.sh`**](../scripts/break_keys.sh)
 
-[**`fix_keys.sh`**](../scripts/break_keys.sh)
+[**`fix_keys.sh`**](../scripts/fix_keys.sh)
 
 ### 2. Воспроизведение
 

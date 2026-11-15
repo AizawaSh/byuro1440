@@ -2,7 +2,7 @@
 
 ### 1. Скрипты
 
-[**`break_route.sh`**](../scripts/break_route.sh.sh)
+[**`break_route.sh`**](../scripts/break_route.sh)
 
 [**`fix_route.sh`**](../scripts/fix_route.sh)
 
@@ -33,7 +33,7 @@ ip route get 8.8.8.8 from 10.45.0.x
 ~~~
 Если вывод показывает `dev ens3` вместо `dev uesimtun0` — маршрут потерян.
 
-#### Wireshark (захват на ens3 RAAN-VM)
+#### Wireshark (захват на ens3 RAN-VM)
 
 **Что искать:**
 - На `ens3` пакеты не идут в туннель, отправляются напрямую с ens3.

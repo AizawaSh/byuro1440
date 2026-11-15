@@ -50,7 +50,7 @@ sudo tail -20 /var/log/open5gs/amf.log
 - AMF отклонил регистрацию с кодом **90** (причина, связанная с политиками).
 
 ~~~bash
-sudo tail -20 /var/log/open5gs/amf.log
+sudo tail -20 /var/log/open5gs/scp.log
 ~~~
 Ищите строки:
 ~~~

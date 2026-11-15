@@ -4,7 +4,7 @@
 
 [**`break_mtu.sh`**](../scripts/break_mtu.sh)
 
-[**`fix_mtu.sh`** ](../scripts/fix_mtu.sh)
+[**`fix_mtu.sh`**](../scripts/fix_mtu.sh)
 
 ### 2. Воспроизведение
 
