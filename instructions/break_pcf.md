@@ -2,21 +2,11 @@
 
 ### 1. Скрипты
 
-**`break_pcf.sh`** (Core-VM):
-~~~bash
-#!/bin/bash
-sudo systemctl stop open5gs-pcfd
-echo "PCF остановлен. Перезапустите UE для проверки."
-~~~
+[**`break_pcf.sh`**](../scripts/break_pcf.sh)
 
-**`fix_pcf.sh`** (Core-VM):
-~~~bash
-#!/bin/bash
-sudo systemctl start open5gs-pcfd
-echo "PCF запущен. Перезапустите UE."
-~~~
+[**`fix_pcf.sh`**](../scripts/fix_pcf.sh)
 
-> В Open5GS PCF по умолчанию слушает `127.0.0.13:7777` (SBI) [citation:7]. При остановке службы AMF не сможет получить политики для UE.
+> В Open5GS PCF по умолчанию слушает `127.0.0.13:7777` (SBI). При остановке службы AMF не сможет получить политики для UE.
 
 ### 2. Воспроизведение
 
@@ -35,41 +25,75 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 
 #### Логи UE (RAN-VM)
 
-Регистрация не завершается. В логе UE появится таймаут или `Registration Reject`. В отличие от DNN или ключей, здесь нет явного сообщения о причине — UE просто не получает ответа от сети.
+Регистрация не завершается. В логе UE появится таймаут или `Registration Reject`.
 
-#### Логи AMF (Core-VM)
+<p align="center">
+  <img src="../images/break_pcf_ue.png" alt="break_pcf_ue" />
+</p>
+
+#### Логи AMF и SCP (Core-VM)
 
 ~~~bash
-sudo grep -i "pcf\|policy\|npcf" /var/log/open5gs/amf.log | tail -20
+sudo tail -20 /var/log/open5gs/amf.log
 ~~~
 
-Ищите строки, связанные с попыткой запроса политик к PCF:
+Ищите строки:
 ~~~
-[sbi] DEBUG: [201:POST] http://127.0.0.13:7777/npcf-am-policy-control/v1/policies
-[gmm] ERROR: Invalid service name [npcf-am-policy-control]
+[amf] ERROR: [imsi-...]HTTP response error [504] (../src/amf/npcf-handler.c:46)
+[amf] WARNING: [suci-...] Registration reject [90] (../src/amf/nas-path.c:213)
+[gmm] ERROR: [imsi-...] amf_npcf_am_policy_control_handle_create() failed
 ~~~
 
-Согласно issue #3948 в Open5GS, при проблемах с ответом PCF AMF может выдавать `Invalid service name [npcf-am-policy-control]` и даже падать с фатальной ошибкой в состоянии GMM [citation:5]. Если PCF просто остановлен, AMF будет получать ошибку соединения (connection refused) или таймаут.
+**Что это значит:**
+- AMF запросил политики у PCF (через SCP).
+- SCP не смог найти PCF и вернул **HTTP 504 (Gateway Timeout)**.
+- AMF отклонил регистрацию с кодом **90** (причина, связанная с политиками).
+
+~~~bash
+sudo tail -20 /var/log/open5gs/amf.log
+~~~
+Ищите строки:
+~~~
+[scp] ERROR: (NF discover) No NF-Instance [npcf-am-policy-control:AMF]
+~~~
+SCP не нашёл PCF среди зарегистрированных сетевых функций.
+
+<p align="center">
+  <img src="../images/break_pcf_amf-scp.png" alt="break_pcf_amf-scp" />
+</p>
 
 #### Wireshark (захват на dummy0)
 
-**Фильтр:**
-~~~
-tcp.port == 7777
-~~~
 
 **Что искать:**
-1. AMF отправляет HTTP/2-запрос к PCF (`127.0.0.13:7777`) с URI `/npcf-am-policy-control/v1/policies` [citation:3].
-2. Ответа нет (таймаут) или приходит TCP RST (соединение отклонено), если PCF остановлен.
-3. При необходимости примените `Decode As → HTTP2` для порта 7777.
+1. Трафик AMF → SCP (`127.0.0.200:7777`) присутствует. 
+- AMF отправляет HTTP/2-запрос к PCF с URI `/npcf-am-policy-control/v1/policies`.
+- Трафика SCP → PCF (`127.0.0.13:7777`) **нет**, потому что PCF остановлен.
+- В ответ на запрос AMF приходит ошибка 504 (или соединение просто не устанавливается).
 
-> **Важно**: PCF также может быть недоступен через SCP, если в `amf.yaml` клиент SBI настроен на SCP (`127.0.0.200:7777`). В этом случае SCP вернёт ошибку 500 или таймаут, а не прямое RST от PCF.
+> **Важно**: В конфигурации AMF использует SCP для SBI-сигнализации (`amf.yaml` → `sbi.client.scp`). Поэтому в дампе нет прямого запроса к PCF — только к SCP. Это корректное поведение для архитектуры с прокси.
+
+<p align="center">
+  <img src="../images/break_pcf_dump1.png" alt="break_pcf_dump1" />
+</p>
+
+2. Ответа нет (таймаут) или приходит TCP RST (соединение отклонено), если PCF остановлен.
+3. В ответ на запрос регистрации UE AMF отправляет `Registration reject` с причиной `5GMM cause 90 (Payload was not forwarded)`. 
+
+<p align="center">
+  <img src="../images/break_pcf_dump2.png" alt="break_pcf_dump2" />
+</p>
 
 ### 4. Устранение
 
+На Core-VM:
+
 ~~~bash
-cd ~/UERANSIM
 bash fix_pcf.sh
+~~~
+
+На RAN-VM перезапустите UE:
+~~~bash
 sudo pkill -f nr-ue
 sudo ./build/nr-ue -c config/open5gs-ue.yaml
 ~~~
@@ -82,8 +106,8 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 |---|---|
 | **Название** | Недоступность PCF (Policy Control Function) |
 | **Симптом в логах UE** | Регистрация не завершается, таймаут или `Registration Reject` |
-| **Симптом в логах AMF** | Ошибки SBI-запроса к PCF: `Invalid service name [npcf-am-policy-control]` или таймаут соединения [citation:5] |
-| **Симптом в Wireshark** | HTTP/2-запрос от AMF к `127.0.0.13:7777` (`/npcf-am-policy-control/v1/policies`) не получает ответа [citation:3] |
+| **Симптом в логах AMF** | `HTTP response error [504]` <br> `Registration reject [90]` <br> `amf_npcf_am_policy_control_handle_create() failed` |
+| **Симптом в логах SCP** | `ERROR: (NF discover) No NF-Instance [npcf-am-policy-control:AMF]` |
+| **Симптом в Wireshark** | Трафик AMF → SCP (`127.0.0.200:7777`) есть; SCP → PCF (`127.0.0.13:7777`) нет |
 | **Поведение абонента** | Регистрация не проходит, `uesimtun0` не появляется |
-| **Локализация** | `systemctl status open5gs-pcfd` — `inactive`. В `amf.log` — ошибки SBI-запроса к PCF |
-| **Устранение** | Запустить PCF (`fix_pcf.sh`), перезапустить UE |
+| **Локализация** | `systemctl status open5gs-pcfd` — `inactive`. В `amf.log` — ошибка 504; в `scp.log` — `No NF-Instance` |

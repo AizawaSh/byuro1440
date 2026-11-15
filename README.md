@@ -395,9 +395,9 @@ tc filter show dev lo ingress
 4. [Некорректный MTU](instructions/break_mtu.md)
 5. [Потерянный маршрут](instructions/break_route.md)
 6. [Отсутствующий абонент в WebUI](instructions/break_subscriber.md)
-7. Недоступность PCF
-8. Отключение SMF
-9. Падение AMF
+7. [Недоступность PCF](instructions/break_pcf.md)
+8. [Отключение SMF](instructions/break_smf.md)
+9. [Падение AMF](instructions/break_amf.md)
 
 Для каждой подготовлены скрипты `break_*.sh` / `fix_*.sh` и шаблон описания.
 

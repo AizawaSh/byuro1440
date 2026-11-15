@@ -70,8 +70,6 @@ sudo grep -i "Cannot find IMSI\|User not found\|imsi-999700000000001" /var/log/o
 На Core-VM:
 ~~~bash
 bash fix_subscriber.sh
-sudo pkill -f nr-ue
-sudo ./build/nr-ue -c config/open5gs-ue.yaml
 ~~~
 
 На RAN-VM перезапустите UE:
@@ -92,4 +90,3 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 | **Симптом в логах UDM** | `HTTP response error [404]` |
 | **Симптом в Wireshark** | `Registration Request` → `Registration Reject` |
 | **Поведение абонента** | Сеть не пускает, `uesimtun0` не появляется |
-| **Локализация** | Сравнить `supi` в `open5gs-ue.yaml` с IMSI в коллекции `subscribers` MongoDB |

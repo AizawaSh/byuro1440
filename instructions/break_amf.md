@@ -2,19 +2,9 @@
 
 ### 1. Скрипты
 
-**`break_amf.sh`** (Core-VM):
-~~~bash
-#!/bin/bash
-sudo systemctl stop open5gs-amfd
-echo "AMF остановлен. Перезапустите gNB и UE для проверки."
-~~~
+[**`break_amf.sh`**](../scripts/break_amf.sh)
 
-**`fix_amf.sh`** (Core-VM):
-~~~bash
-#!/bin/bash
-sudo systemctl start open5gs-amfd
-echo "AMF запущен. Перезапустите gNB и UE."
-~~~
+[**`fix_amf.sh`**](../scripts/fix_amf.sh.sh)
 
 ### 2. Воспроизведение
 
@@ -43,9 +33,17 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 ~~~
 Или таймаут. NG Setup не пройдёт, и UE не сможет даже начать регистрацию.
 
+<p align="center">
+  <img src="../images/break_amf_gnb.png" alt="break_pcf_ue" />
+</p>
+
 #### Логи UE (RAN-VM)
 
-UE не увидит сеть или не сможет отправить `Registration Request` (так как gNB не подключён к AMF). В логе UE будет таймаут на этапе `PLMN-SEARCH` или `RRC Setup`.
+UE не увидит сеть или не сможет отправить `Registration Request`.
+
+<p align="center">
+  <img src="../images/break_amf_ue.png" alt="break_pcf_ue" />
+</p>
 
 #### Проверка на Core-VM
 
@@ -61,11 +59,6 @@ sudo ss -Slnp | grep 38412
 Вывод должен быть пустым (раньше вы видели `192.168.100.196:38412`).
 
 #### Wireshark (захват на dummy0)
-
-**Фильтр:**
-~~~
-sctp.port == 38412 || ngap
-~~~
 
 **Что искать:**
 - При запуске gNB отправляет `NGSetupRequest` (SCTP INIT), но **ответа нет** (AMF не слушает порт).
@@ -98,4 +91,3 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 | **Симптом в Wireshark** | Нет ответа на `NGSetupRequest`; SCTP-соединение не устанавливается |
 | **Поведение абонента** | Сеть полностью недоступна, `uesimtun0` не появляется |
 | **Локализация** | `systemctl status open5gs-amfd` — `inactive`; `ss -Slnp \| grep 38412` — пусто |
-| **Устранение** | Запустить AMF (`fix_amf.sh`), перезапустить gNB и UE |

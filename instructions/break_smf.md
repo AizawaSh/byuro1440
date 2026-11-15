@@ -2,19 +2,9 @@
 
 ### 1. Скрипты
 
-**`break_smf.sh`** (Core-VM):
-~~~bash
-#!/bin/bash
-sudo systemctl stop open5gs-smfd
-echo "SMF остановлен. Перезапустите UE для проверки."
-~~~
+[**`break_smf.sh`**](../scripts/break_smf.sh)
 
-**`fix_smf.sh`** (Core-VM):
-~~~bash
-#!/bin/bash
-sudo systemctl start open5gs-smfd
-echo "SMF запущен. Перезапустите UE."
-~~~
+[**`fix_smf.sh`**](../scripts/fix_smf.sh)
 
 ### 2. Воспроизведение
 
@@ -40,12 +30,13 @@ sudo grep -i "smf\|smcontext\|No SMF" /var/log/open5gs/amf.log | tail -20
 
 Вы увидите строки, характерные для недоступности SMF:
 ~~~
-[amf] INFO: [imsi-999700000000001] No SMF Instance (../src/amf/gmm-handler.c:1284)
-[amf] ERROR: [1:0] No SmContextCreateError (../src/amf/nsmf-handler.c:126)
-[amf] WARNING: [suci-...] DL NAS transport (../src/amf/nas-path.c:1014)
+[amf] INFO: No V-SMF Instance (../src/amf/gmm-handler.c:...)
+[amf] ERROR: [1:0] No SmContextCreateError (../src/amf/nsmf-handler.c:...)
 ~~~
 
-**Что это значит:** AMF попытался найти SMF для обработки запроса на PDU-сессию, но не смог (SMF не зарегистрирован в NRF или недоступен). В результате создание SM-контекста завершилось ошибкой, и UE получило отказ [citation:16][citation:19].
+**Что это значит:** AMF попытался найти SMF для обработки запроса на PDU-сессию, но не смог (SMF не зарегистрирован в NRF или недоступен). В результате создание SM-контекста завершилось ошибкой, и UE получило отказ.
+
+
 
 #### Логи SCP (Core-VM) — подтверждение
 
@@ -58,7 +49,11 @@ sudo grep -i "smf\|nsmf-pdusession\|No NF" /var/log/open5gs/scp.log | tail -10
 [scp] ERROR: (NF discover) No NF-Instance [nsmf-pdusession:AMF]
 ~~~
 
-Это означает, что SCP не смог найти SMF среди зарегистрированных сетевых функций [citation:16][citation:27].
+Это означает, что SCP не смог найти SMF среди зарегистрированных сетевых функций.
+
+<p align="center">
+  <img src="../images/break_smf_core.png" alt="break_pcf_ue" />
+</p>
 
 #### Логи UE (RAN-VM)
 
@@ -67,24 +62,28 @@ sudo grep -i "smf\|nsmf-pdusession\|No NF" /var/log/open5gs/scp.log | tail -10
 Initial Registration is successful
 Sending PDU Session Establishment Request
 ...
-PDU Session establishment is successful  # этого НЕ будет
+PDU Session establishment is successful # НЕ будет
 ~~~
+
+<p align="center">
+  <img src="../images/break_smf_ue.png" alt="break_pcf_ue" />
+</p>
 
 В отличие от неверного DNN (где приходит `Reject`), здесь UE может просто не получить ответа (таймаут) или получить отказ с общей причиной.
 
 #### Wireshark (захват на dummy0)
 
-**Фильтр:**
-~~~
-http2 || tcp.port == 7777
-~~~
-
 **Что искать:**
 - AMF отправляет запрос `POST /nsmf-pdusession/v1/sm-contexts` к SCP (`127.0.0.200:7777`).
+
+<p align="center">
+  <img src="../images/break_smf_dump.png" alt="break_pcf_dump" />
+</p>
+
 - SCP не может найти SMF и возвращает ошибку (504 или 400).
 - Трафика SCP → SMF (`127.0.0.4:7777`) **нет**, потому что SMF остановлен.
 
-> **Важно**: Как и с PCF, в вашей конфигурации AMF общается с SMF через SCP. Прямого запроса к `127.0.0.4` в дампе не будет.
+> **Важно**: Как и с PCF, в конфигурации AMF общается с SMF через SCP. Прямого запроса к `127.0.0.4` в дампе не будет.
 
 ### 4. Устранение
 
@@ -108,10 +107,9 @@ ping -I 10.45.0.x -c 2 8.8.8.8
 | Поле | Содержание |
 |---|---|
 | **Название** | Отключение SMF (Session Management Function) |
-| **Симптом в логах AMF** | `No SMF Instance`, `No SmContextCreateError`, `DL NAS transport`  |
+| **Симптом в логах AMF** | `No V-SMF Instance` <br> `No SmContextCreateError`  |
 | **Симптом в логах SCP** | `(NF discover) No NF-Instance [nsmf-pdusession:AMF]` |
 | **Симптом в логах UE** | Регистрация проходит, но PDU-сессия не устанавливается (таймаут или отказ) |
 | **Симптом в Wireshark** | AMF → SCP (`127.0.0.200:7777`) есть; SCP → SMF (`127.0.0.4:7777`) нет |
 | **Поведение абонента** | `uesimtun0` не появляется, интернета нет |
-| **Локализация** | `systemctl status open5gs-smfd` — `inactive`; в `amf.log` — `No SMF Instance` |
-| **Устранение** | Запустить SMF (`fix_smf.sh`), перезапустить UE |
+| **Локализация** | `systemctl status open5gs-smfd` — `inactive`; в `amf.log` — `No V-SMF Instance` |
