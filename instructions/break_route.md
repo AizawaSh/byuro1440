@@ -2,36 +2,9 @@
 
 ### 1. Скрипты
 
-**`break_route.sh`** (RAN-VM):
-~~~bash
-#!/bin/bash
-UE_IP="10.45.0.2"
-TABLE="rt_uesimtun0"
+[**`break_route.sh`**](../scripts/break_route.sh.sh)
 
-# Удаляем правило маршрутизации, которое направляет трафик UE в таблицу UERANSIM
-sudo ip rule del from $UE_IP lookup $TABLE 2>/dev/null
-echo "Правило маршрутизации для $UE_IP удалено."
-
-# Проверка
-ip rule show | grep $UE_IP || echo "Правила для $UE_IP больше нет."
-~~~
-
-**`fix_route.sh`** (RAN-VM):
-~~~bash
-#!/bin/bash
-UE_IP="10.45.0.2"
-TABLE="rt_uesimtun0"
-
-if ip rule show | grep -q "from $UE_IP lookup $TABLE"; then
-  echo "Правило уже существует."
-else
-  sudo ip rule add from $UE_IP lookup $TABLE
-  echo "Правило маршрутизации для $UE_IP восстановлено."
-fi
-ip rule show | grep $UE_IP
-~~~
-
-> **Важно**: подставьте актуальный IP UE (посмотрите в логе `uesimtun0, 10.45.0.x`). Если IP изменился после перезапуска UE, обновите переменную `UE_IP`.
+[**`fix_route.sh`**](../scripts/fix_route.sh)
 
 ### 2. Воспроизведение
 
@@ -50,22 +23,24 @@ bash break_route.sh
 
 В логе UE ошибок не будет — регистрация и PDU-сессия уже установлены. Проблема проявляется только в том, что **ping перестаёт проходить**, хотя `uesimtun0` остаётся поднятым.
 
+<p align="center">
+  <img src="../images/break_route_ping.png" alt="break_route_ping" />
+</p>
+
 Проверьте:
 ~~~bash
 ip route get 8.8.8.8 from 10.45.0.x
 ~~~
 Если вывод показывает `dev ens3` вместо `dev uesimtun0` — маршрут потерян.
 
-#### Wireshark (захват на dummy0)
-
-**Фильтр:**
-~~~
-icmp
-~~~
+#### Wireshark (захват на ens3 RAAN-VM)
 
 **Что искать:**
-- На `uesimtun0` (если захватывать там) — **пусто**, пакеты не идут в туннель.
-- На `dummy0` — ICMP-пакеты от UE могут отсутствовать или уходить через `ens3` (не в туннель).
+- На `ens3` пакеты не идут в туннель, отправляются напрямую с ens3.
+
+<p align="center">
+  <img src="../images/break_route_dump.png" alt="break_route_dump" />
+</p>
 
 > **Важно**: В отличие от DNN или ключей, здесь нет сообщений об ошибках в сигнализации. Проблема чисто в маршрутизации на хосте RAN-VM.
 
@@ -81,7 +56,6 @@ ip route show table rt_uesimtun0
 ### 4. Устранение
 
 ~~~bash
-cd ~/UERANSIM
 bash fix_route.sh
 ~~~
 
@@ -97,7 +71,6 @@ ping -I 10.45.0.x -c 2 8.8.8.8
 |---|---|
 | **Название** | Потерянный маршрут между сегментами (RAN-VM) |
 | **Симптом в логах** | Ошибок в Open5GS/UERANSIM нет — регистрация и PDU-сессия проходят успешно |
-| **Симптом в Wireshark** | На `uesimtun0` пакеты отсутствуют; на `dummy0` ICMP от UE не видны или уходят через `ens3` |
+| **Симптом в Wireshark** | На `uesimtun0` пакеты отсутствуют, уходят через `ens3` |
 | **Поведение абонента** | `uesimtun0` поднят, IP есть, но `ping -I 10.45.0.x 8.8.8.8` не проходит |
-| **Локализация** | `ip route get 8.8.8.8 from 10.45.0.x` → показывает `dev ens3` вместо `dev uesimtun0` |
-| **Устранение** | Восстановить правило маршрутизации (`fix_route.sh`) или перезапустить UE |
+| **Локализация** | `ip route get 8.8.8.8 from 10.45.0.x` показывает `dev ens3` вместо `dev uesimtun0` |

@@ -393,8 +393,8 @@ tc filter show dev lo ingress
 2. [Рассогласование ключей (K/OPc)](instructions/break_keys.md)
 3. [Несовпадение PLMN](instructions/break_plmn.md)
 4. [Некорректный MTU](instructions/break_mtu.md)
-5. Потерянный маршрут
-6. Отсутствующий абонент в WebUI
+5. [Потерянный маршрут](instructions/break_route.md)
+6. [Отсутствующий абонент в WebUI](instructions/break_subscriber.md)
 7. Недоступность PCF
 8. Отключение SMF
 9. Падение AMF

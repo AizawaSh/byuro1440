@@ -6,11 +6,6 @@
 
 [**`fix_mtu.sh`** ](../scripts/fix_mtu.sh)
 
-> На RAN-VM перед проверкой убедитесь, что MTU на `uesimtun0` не меньше 1400:
-> ~~~bash
-> sudo ip link set dev uesimtun0 mtu 1400
-> ~~~
-
 ### 2. Воспроизведение
 
 На Core-VM:
@@ -23,7 +18,7 @@ bash break_mtu.sh
 # Мелкий пакет должен пройти
 ping -I 10.45.0.x -s 100 -c 2 8.8.8.8
 
-# Крупный пакет с запретом фрагментации — не должен пройти
+# Крупный пакет с запретом фрагментации - не должен пройти
 ping -I 10.45.0.x -s 1300 -M do -c 4 8.8.8.8
 ~~~
 
@@ -40,7 +35,7 @@ ping: local error: message too long, mtu=1200
   <img src="../images/break_mtu_ping.png" alt="break_mtu_ping" />
 </p>
 
-Это означает, что ядро RAN-VM знает эффективный MTU пути (1200, от `ogstun`) и отказывается отправлять пакет с DF, который не влезает в этот MTU.
+Это означает, что ядро RAN-VM знает эффективный MTU пути и отказывается отправлять пакет с DF, который не влезает в этот MTU.
 
 #### Wireshark (захват на dummy0)
 
@@ -53,11 +48,12 @@ ping: local error: message too long, mtu=1200
 </p>
 
 - Мелкие ICMP-запросы (`-s 100`) проходят нормально.
-- Если отправлять крупные пакеты без `-M do` (разрешив фрагментацию), можно увидеть фрагментированные пакеты, но ответы могут не возвращаться.
 
 <p align="center">
   <img src="../images/break_mtu_dump2.png" alt="break_mtu_dump2" />
 </p>
+
+- Если отправлять крупные пакеты без `-M do` (разрешив фрагментацию), можно увидеть фрагментированные пакеты, но ответы могут не возвращаться.
 
 > **Важно**: Это классический «blackhole MTU» — handshake и мелкие пакеты проходят, а крупные данные (HTTP, загрузки) зависают.
 
@@ -65,7 +61,7 @@ ping: local error: message too long, mtu=1200
 
 На Core-VM:
 ~~~bash
-ip link show ogstun | grep mtu   # должно быть 1200 (сломано)
+ip link show ens3 | grep mtu   # должно быть 1200 (сломано)
 ~~~
 
 На RAN-VM:
@@ -84,7 +80,7 @@ ip route get 8.8.8.8 from 10.45.0.x   # показывает эффективн�
 bash fix_mtu.sh
 ~~~
 
-На RAN-VM очистите кэш PMTU (важно!):
+На RAN-VM очистите кэш PMTU:
 ~~~bash
 sudo ip route flush cache
 ~~~
@@ -98,9 +94,8 @@ ping -I 10.45.0.x -s 1300 -M do -c 4 8.8.8.8
 
 | Поле | Содержание |
 |---|---|
-| **Название** | Некорректный MTU на `ogstun` (blackhole MTU) |
+| **Название** | Некорректный MTU на `ens3` (blackhole MTU) |
 | **Симптом в логах UE** | `ping: local error: message too long, mtu=1200` |
 | **Симптом в Wireshark** | Крупные ICMP-пакеты отсутствуют; мелкие проходят. При фрагментации видны фрагменты, но ответы не возвращаются |
 | **Поведение абонента** | `uesimtun0` поднят, мелкий ping проходит, крупный (`-s 1300 -M do`) — 100% loss. HTTP/загрузки зависают |
-| **Локализация** | `ip link show ogstun` (Core) — MTU 1200; `ip link show uesimtun0` (RAN) — 1400. Ядро RAN-VM видит эффективный MTU 1200 и отказывается отправлять крупные пакеты с DF |
-| **Устранение** | Вернуть MTU `ogstun` на 1400 (`fix_mtu.sh`), очистить кэш PMTU на RAN-VM (`ip route flush cache`) |
+| **Локализация** | `ip link show ens3` (Core) — MTU 1200; `ip link show uesimtun0` (RAN) — 1400. Ядро RAN-VM видит эффективный MTU 1200 и отказывается отправлять крупные пакеты с DF |
