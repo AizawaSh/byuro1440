@@ -60,7 +60,7 @@ sudo apt install -y open5gs
 
 ### 2.3. Настройка WebUI через Docker
 
-Так как MongoDB работает через Docker невозможно собрать WebUI автоматически, так как во время сборки ищется пакет MongoDB. Сборка WebUI из исходников на Node.js 22 падает с `Unexpected token` из-за несовместимости старых зависимостей Next.js. Вследствие вышеуказаных проблем используется готовый Docker-образ.
+Так как MongoDB работает через Docker, невозможно собрать WebUI автоматически: при сборке ищется пакет MongoDB. Сборка WebUI из исходников на Node.js 22 падает с `Unexpected token` из-за несовместимости старых зависимостей Next.js. Вследствие вышеуказанных проблем используется готовый Docker-образ.
 
 ~~~
 sudo docker rm -f webui 2>/dev/null
@@ -84,7 +84,7 @@ WebUI доступен по адресу `http://<IP-Core-VM>:9999/`. Логин
 
 Файл `/etc/open5gs/amf.yaml`:
 
-> Подставьте актуальный IP-Core-VM в конфигурацию. Используемый файл приведен в [configs/amf.yaml](configs/amf.yaml)
+> Подставьте актуальный IP-Core-VM в конфигурацию. Используемый файл приведен в [`configs/amf.yaml`](configs/amf.yaml)
 
 ~~~yaml
 amf:
@@ -117,7 +117,7 @@ sudo systemctl restart open5gs-amfd
 
 Файл `/etc/open5gs/upf.yaml`, секция `gtpu`:
 
-> Подставьте актуальный IP-Core-VM в конфигурацию. Используемый файл приведен в [configs/upf.yaml](configs/upf.yaml)
+> Подставьте актуальный IP-Core-VM в конфигурацию. Используемый файл приведен в [`configs/upf.yaml`](configs/upf.yaml)
 
 ~~~yaml
   gtpu:
@@ -176,7 +176,7 @@ sudo netfilter-persistent save
 | Session Type | `IPv4` |
 | SST | `1` |
 
-Заполните поле `IMSI` - `999700000000001`. У остальныз полей можно оставить значения по умолчанеию.
+Заполните поле `IMSI`. У остальных полей можно оставить значения по умолчанию.
 
 <p align="center">
   <img src="images/image2.png" alt="WebUI" width="50%" />
@@ -305,7 +305,7 @@ sudo apt install wireshark -y
 
 Чтобы в одном дампе видеть и сигнализацию N2/NAS (с `ens3`), и внутреннюю сигнализацию SBI/HTTP2 (с `lo`), используется зеркалирование через `tc mirred`. Создаётся фиктивный интерфейс `dummy0`, на который копируются только пакеты 5G (по портам).
 
-Создайте файл [/usr/local/bin/setup_mirror.sh](configs/setup_mirror.sh).
+Создайте файл [`/usr/local/bin/setup_mirror.sh`](configs/setup_mirror.sh).
 
 Сделайте файл исполняемым:
 
@@ -313,7 +313,7 @@ sudo apt install wireshark -y
 sudo chmod +x /usr/local/bin/setup_mirror.sh
 ~~~
 
-Для автозапуска необходимо создать unit [/etc/systemd/system/mirror.service](configs/mirror.service)
+Для автозапуска необходимо создать unit [`/etc/systemd/system/mirror.service`](configs/mirror.service)
 
 Активируйте:
 
@@ -353,7 +353,7 @@ tc filter show dev lo ingress
 
 Чтобы в дампе вместо IP-адресов отображались имена (`AMF`, `SMF`, `UPF` и т.д.), а фильтры работали по этим именам, нужно один раз настроить файл `hosts` Wireshark и включить разрешение имён.
 
-Создайте в этой файл [~/.config/wireshark/hosts](configs/hosts) со следующим содержимым:
+Создайте в этой файл [`~/.config/wireshark/hosts`](configs/hosts) со следующим содержимым:
 
 ~~~
 127.0.0.5    AMF

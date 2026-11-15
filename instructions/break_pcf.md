@@ -39,8 +39,8 @@ sudo tail -20 /var/log/open5gs/amf.log
 
 Ищите строки:
 ~~~
-[amf] ERROR: [imsi-...]HTTP response error [504] (../src/amf/npcf-handler.c:46)
-[amf] WARNING: [suci-...] Registration reject [90] (../src/amf/nas-path.c:213)
+[amf] ERROR: [imsi-...]HTTP response error [504]
+[amf] WARNING: [suci-...] Registration reject [90]
 [gmm] ERROR: [imsi-...] amf_npcf_am_policy_control_handle_create() failed
 ~~~
 
@@ -100,7 +100,7 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 
 После перезапуска дождитесь `Initial Registration is successful` и проверьте ping.
 
-### 5. Сводная таблица для каталога
+### 5. Сводная таблица
 
 | Поле | Содержание |
 |---|---|

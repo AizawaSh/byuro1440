@@ -30,8 +30,8 @@ sudo grep -i "smf\|smcontext\|No SMF" /var/log/open5gs/amf.log | tail -20
 
 Вы увидите строки, характерные для недоступности SMF:
 ~~~
-[amf] INFO: No V-SMF Instance (../src/amf/gmm-handler.c:...)
-[amf] ERROR: [1:0] No SmContextCreateError (../src/amf/nsmf-handler.c:...)
+[amf] INFO: No V-SMF Instance
+[amf] ERROR: [1:0] No SmContextCreateError
 ~~~
 
 **Что это значит:** AMF попытался найти SMF для обработки запроса на PDU-сессию, но не смог (SMF не зарегистрирован в NRF или недоступен). В результате создание SM-контекста завершилось ошибкой, и UE получило отказ.
@@ -102,7 +102,7 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 ping -I 10.45.0.x -c 2 8.8.8.8
 ~~~
 
-### 5. Сводная таблица для каталога
+### 5. Сводная таблица
 
 | Поле | Содержание |
 |---|---|

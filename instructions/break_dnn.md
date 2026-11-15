@@ -47,7 +47,6 @@ DNN "wrong_dnn" Not Supported OR Not Subscribed in the Slice
 
 #### Wireshark (захват на dummy0)
 
-
 **Где именно смотреть:**
 1. Найдите пакет `UplinkNASTransport`.
 2. Внутри него — `NAS-PDU`.

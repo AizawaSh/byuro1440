@@ -81,7 +81,7 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 
 После перезапуска дождитесь `Initial Registration is successful` и проверьте ping.
 
-### 5. Сводная таблица для каталога
+### 5. Сводная таблица
 
 | Поле | Содержание |
 |---|---|

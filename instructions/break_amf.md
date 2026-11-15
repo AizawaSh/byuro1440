@@ -4,7 +4,7 @@
 
 [**`break_amf.sh`**](../scripts/break_amf.sh)
 
-[**`fix_amf.sh`**](../scripts/fix_amf.sh.sh)
+[**`fix_amf.sh`**](../scripts/fix_amf.sh)
 
 ### 2. Воспроизведение
 
@@ -28,13 +28,13 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 
 При запуске gNB не сможет установить SCTP-соединение с AMF. В логе gNB появится:
 ~~~
-[sctp] [info] Trying to establish SCTP connection... (192.168.100.196:38412)
+[sctp] [info] Trying to establish SCTP connection... (<IP-Core-VM>:38412)
 [sctp] [error] SCTP connection failed
 ~~~
 Или таймаут. NG Setup не пройдёт, и UE не сможет даже начать регистрацию.
 
 <p align="center">
-  <img src="../images/break_amf_gnb.png" alt="break_pcf_ue" />
+  <img src="../images/break_amf_gnb.png" alt="break_amf_gnb" />
 </p>
 
 #### Логи UE (RAN-VM)
@@ -42,7 +42,7 @@ sudo ./build/nr-ue -c config/open5gs-ue.yaml
 UE не увидит сеть или не сможет отправить `Registration Request`.
 
 <p align="center">
-  <img src="../images/break_amf_ue.png" alt="break_pcf_ue" />
+  <img src="../images/break_amf_ue.png" alt="break_amf_ue" />
 </p>
 
 #### Проверка на Core-VM
@@ -56,7 +56,7 @@ systemctl status open5gs-amfd --no-pager
 ~~~bash
 sudo ss -Slnp | grep 38412
 ~~~
-Вывод должен быть пустым (раньше вы видели `192.168.100.196:38412`).
+Вывод должен быть пустым (раньше вы видели `<IP-Core-VM>:38412`).
 
 #### Wireshark (захват на dummy0)
 
@@ -81,12 +81,12 @@ sudo ./build/nr-gnb -c config/open5gs-gnb.yaml
 sudo ./build/nr-ue -c config/open5gs-ue.yaml
 ~~~
 
-### 5. Сводная таблица для каталога
+### 5. Сводная таблица
 
 | Поле | Содержание |
 |---|---|
 | **Название** | Падение AMF (Access and Mobility Management Function) |
-| **Симптом в логах gNB** | `SCTP connection failed`, таймаут при попытке подключения к `192.168.100.196:38412` |
+| **Симптом в логах gNB** | `SCTP connection failed`, таймаут при попытке подключения к `<IP-Core-VM>:38412` |
 | **Симптом в логах UE** | Регистрация не начинается (UE не видит сеть или таймаут на RRC) |
 | **Симптом в Wireshark** | Нет ответа на `NGSetupRequest`; SCTP-соединение не устанавливается |
 | **Поведение абонента** | Сеть полностью недоступна, `uesimtun0` не появляется |
